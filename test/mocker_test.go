@@ -3,20 +3,30 @@ package test
 import (
 	"easy-mock/easymock"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"github.com/stretchr/testify/suite"
-	"log"
 	"net/http"
 	"testing"
 )
 
 var (
-	mockGoogleUrl     = "https://www.google.com"
-	mockGoogleStrResp = "this is google"
-	mockBingUrl       = "https://www.bing.com"
-	mockBingBytesResp = []byte("this is bing")
-	mockByteDanceUrl  = "https://www.bytedance.com"
+	mockGoogleUrl       = "https://www.google.com"
+	mockGoogleStrResp   = "this is google"
+	mockGoogleBytesResp = []byte("this is bing")
+	mockNoResponseUrl   = "https://www.notfound.com"
+	company             = Company{
+		Name:     "ByteDance",
+		Address:  "成都市OCG国际中心",
+		PostCode: 610041,
+	}
 )
+
+type Company struct {
+	Name     string `json:"name" xml:"name"`
+	Address  string `json:"address" xml:"address"`
+	PostCode int    `json:"post_code" xml:"post_code"`
+}
 
 type MockerTestSuite struct {
 	suite.Suite
@@ -29,10 +39,6 @@ func TestMocker(t *testing.T) {
 func (suite *MockerTestSuite) BeforeTest(suiteName, testName string) {
 	fmt.Printf("[%s] - [%s] start\n", suiteName, testName)
 	easymock.Start()
-	easymock.RegisterResponder(http.MethodGet, mockGoogleUrl,
-		easymock.NewStringEasyResponder(http.StatusOK, mockGoogleStrResp))
-	easymock.RegisterResponder(http.MethodGet, mockBingUrl,
-		easymock.NewBytesEasyResponder(http.StatusOK, mockBingBytesResp))
 }
 
 func (suite *MockerTestSuite) AfterTest(suiteName, testName string) {
@@ -41,63 +47,106 @@ func (suite *MockerTestSuite) AfterTest(suiteName, testName string) {
 }
 
 func (suite *MockerTestSuite) TestEasyMockWithStringResp() {
-	resp, err := http.Get(mockGoogleUrl)
-
-	suite.Nil(err)
-	suite.Equal(http.StatusOK, resp.StatusCode)
-	suite.RespBodyEqual(mockGoogleStrResp, resp)
+	suite.execTestCase(&httpGetCase{
+		baseCase: baseCase{
+			method:       http.MethodGet,
+			url:          mockGoogleUrl,
+			responder:    easymock.NewStringEasyResponder(http.StatusOK, mockGoogleStrResp),
+			shouldRemove: true,
+		},
+		expectedRespBody: mockGoogleStrResp,
+	})
 }
 
 func (suite *MockerTestSuite) TestEasyMockWithBytesResp() {
-	resp, err := http.Get(mockBingUrl)
-
-	suite.Nil(err)
-	suite.Equal(http.StatusOK, resp.StatusCode)
-	suite.RespBodyEqual(mockBingBytesResp, resp)
+	suite.execTestCase(&httpGetCase{
+		baseCase: baseCase{
+			method:       http.MethodGet,
+			url:          mockGoogleUrl,
+			responder:    easymock.NewBytesEasyResponder(http.StatusOK, mockGoogleBytesResp),
+			shouldRemove: true,
+		},
+		expectedRespBody: mockGoogleBytesResp,
+	})
 }
 
 func (suite *MockerTestSuite) TestEasyMockWithJsonResp() {
-	company := struct {
-		Name     string `json:"name"`
-		Address  string `json:"address"`
-		PostCode int    `json:"post_code"`
-	}{
-		Name:     "ByteDance",
-		Address:  "成都市OCG国际中心",
-		PostCode: 610041,
-	}
-
 	jsonResponder, err := easymock.NewJsonEasyResponder(http.StatusOK, company)
 	suite.Nil(err)
-	easymock.RegisterResponder(http.MethodGet, mockByteDanceUrl, jsonResponder)
-
-	resp, err := http.Get(mockByteDanceUrl)
+	expectedRespBody, err := json.Marshal(company)
 	suite.Nil(err)
-	suite.Equal(http.StatusOK, resp.StatusCode)
 
-	expectedJson, _ := json.Marshal(company)
-	suite.RespBodyEqual(expectedJson, resp)
+	suite.execTestCase(&httpGetCase{
+		baseCase: baseCase{
+			method:       http.MethodGet,
+			url:          mockGoogleUrl,
+			responder:    jsonResponder,
+			shouldRemove: true,
+		},
+		expectedRespBody: expectedRespBody,
+	})
+}
+
+func (suite *MockerTestSuite) TestEasyMockWithXmlResp() {
+	xmlResponder, err := easymock.NewXmlEasyResponder(http.StatusOK, company)
+	suite.Nil(err)
+	expectedRespBody, err := xml.Marshal(company)
+	suite.Nil(err)
+
+	suite.execTestCase(&httpGetCase{
+		baseCase: baseCase{
+			method:       http.MethodGet,
+			url:          mockGoogleUrl,
+			responder:    xmlResponder,
+			shouldRemove: true,
+		},
+		expectedRespBody: expectedRespBody,
+	})
 }
 
 func (suite *MockerTestSuite) TestEasyMockWithNoResponder() {
-	easymock.RemoveResponder(http.MethodGet, mockGoogleUrl)
-	resp, err := http.Get(mockGoogleUrl)
-	suite.Nil(resp)
-	suite.NotNil(err)
-	log.Println(err)
+	suite.execTestCase(&httpGetCase{
+		baseCase: baseCase{
+			method:           http.MethodGet,
+			url:              mockNoResponseUrl,
+			responder:        nil,
+			shouldNoResponse: true,
+		},
+		expectedRespBody: nil,
+	})
 }
 
-func (suite *MockerTestSuite) RespBodyEqual(expected interface{}, actual *http.Response) {
-	switch data := expected.(type) {
+func (suite *MockerTestSuite) execTestCase(testCase easyMockTestCase) {
+	testCase.setupCase()
+	suite.checkResult(testCase)
+	testCase.tearDownCase()
+}
+
+func (suite *MockerTestSuite) checkResult(testCase easyMockTestCase) {
+	switch typedCase := testCase.(type) {
+	case *httpGetCase:
+		suite.checkHttpGetResp(typedCase)
+	}
+}
+
+func (suite *MockerTestSuite) checkHttpGetResp(testCase *httpGetCase) {
+	resp, err := testCase.getResult()
+	if testCase.shouldNoResponse {
+		suite.NotNil(err)
+		suite.Nil(resp)
+		return
+	}
+
+	suite.Nil(err)
+	actualBody := make([]byte, resp.ContentLength)
+
+	n, err := resp.Body.Read(actualBody)
+	suite.Nil(err)
+
+	switch expectedResp := testCase.expectedRespBody.(type) {
 	case string:
-		body := make([]byte, len(data))
-		n, err := actual.Body.Read(body)
-		suite.Nil(err)
-		suite.Equal(data, string(body[:n]))
+		suite.Equal([]byte(expectedResp), actualBody[:n])
 	case []byte:
-		body := make([]byte, len(data))
-		n, err := actual.Body.Read(body)
-		suite.Nil(err)
-		suite.Equal(data, body[:n])
+		suite.Equal(expectedResp, actualBody)
 	}
 }

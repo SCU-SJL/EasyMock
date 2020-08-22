@@ -13,40 +13,43 @@ type easyResponse struct {
 	seeker io.ReadSeeker
 }
 
-func (rb *easyResponse) init() {
-	if rb.seeker == nil {
-		switch d := rb.body.(type) {
+func (er *easyResponse) init() {
+	if er.seeker == nil {
+		switch d := er.body.(type) {
 		case string:
-			rb.seeker = strings.NewReader(d)
+			er.seeker = strings.NewReader(d)
 		case []byte:
-			rb.seeker = bytes.NewReader(d)
+			er.seeker = bytes.NewReader(d)
 		}
 	}
 }
 
-func (rb *easyResponse) Read(p []byte) (n int, err error) {
-	rb.init()
-	n, err = rb.seeker.Read(p)
+func (er *easyResponse) Read(p []byte) (n int, err error) {
+	n, err = er.seeker.Read(p)
 	if err == io.EOF {
-		_, _ = rb.seeker.Seek(io.SeekStart, io.SeekStart)
+		_, _ = er.seeker.Seek(io.SeekStart, io.SeekStart)
 	}
 	return
 }
 
-func (rb *easyResponse) Close() (err error) {
-	rb.init()
-	_, err = rb.seeker.Seek(io.SeekStart, io.SeekStart)
+func (er *easyResponse) Close() (err error) {
+	_, err = er.seeker.Seek(io.SeekStart, io.SeekStart)
 	return
 }
 
-func (rb *easyResponse) Clone() *easyResponse {
-	return newEasyResponse(rb.body)
+func (er *easyResponse) Clone() *easyResponse {
+	return &easyResponse{
+		body:   er.body,
+		seeker: er.seeker,
+	}
 }
 
 func newEasyResponse(data interface{}) *easyResponse {
-	return &easyResponse{
+	eResp := &easyResponse{
 		body: data,
 	}
+	eResp.init()
+	return eResp
 }
 
 func newStringResponse(statusCode int, body string) *http.Response {
@@ -61,10 +64,10 @@ func newStringResponse(statusCode int, body string) *http.Response {
 
 func newBytesResponse(statusCode int, body []byte) *http.Response {
 	return &http.Response{
-		Status: strconv.Itoa(statusCode),
-		StatusCode: statusCode,
-		Header: http.Header{},
-		Body: newEasyResponse(body),
+		Status:        strconv.Itoa(statusCode),
+		StatusCode:    statusCode,
+		Header:        http.Header{},
+		Body:          newEasyResponse(body),
 		ContentLength: int64(len(body)),
 	}
 }

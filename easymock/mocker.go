@@ -18,12 +18,12 @@ var (
 
 // TODO add no responder to EasyMocker
 type EasyMocker struct {
-	mu              sync.Mutex
-	cntMu           sync.Mutex
-	responderMap    map[router]*EasyResponder
-	matchedCounter  map[router]int
-	mismatchCounter map[router]int
-	totalCount      int
+	responderMu           sync.Mutex
+	matchCntMu, missCntMu sync.Mutex
+	responderMap          map[router]*EasyResponder
+	matchedCounter        map[router]int
+	mismatchCounter       map[router]int
+	totalCount            int
 }
 
 type router struct {
@@ -33,8 +33,8 @@ type router struct {
 
 func NewEasyMockerTransport() *EasyMocker {
 	return &EasyMocker{
-		mu:              sync.Mutex{},
-		cntMu:           sync.Mutex{},
+		responderMu:     sync.Mutex{},
+		matchCntMu:      sync.Mutex{},
 		responderMap:    make(map[router]*EasyResponder),
 		matchedCounter:  make(map[router]int),
 		mismatchCounter: make(map[router]int),
@@ -90,8 +90,6 @@ func (mocker *EasyMocker) RoundTrip(req *http.Request) (*http.Response, error) {
 		Url:    url,
 	}
 
-	// TODO do responder count here
-
 	responder, ok := mocker.responderMap[rt]
 
 	if !ok {
@@ -108,10 +106,10 @@ func RegisterResponder(method, url string, responder *EasyResponder) {
 		Method: method,
 		Url:    url,
 	}
-	MockerTransport.mu.Lock()
+	MockerTransport.responderMu.Lock()
 	MockerTransport.responderMap[rt] = responder
 	MockerTransport.matchedCounter[rt] = 0
-	MockerTransport.mu.Unlock()
+	MockerTransport.responderMu.Unlock()
 }
 
 func RemoveResponder(method, url string) {
@@ -119,31 +117,31 @@ func RemoveResponder(method, url string) {
 		Method: method,
 		Url:    url,
 	}
-	MockerTransport.mu.Lock()
+	MockerTransport.responderMu.Lock()
 	delete(MockerTransport.responderMap, rt)
-	MockerTransport.mu.Unlock()
+	MockerTransport.responderMu.Unlock()
 }
 
 func (mocker *EasyMocker) connectFail(req *http.Request) (*http.Response, error) {
-	return nil, fmt.Errorf(routingFailedTmpl, req.URL.Scheme + `://` + req.URL.Host)
+	return nil, fmt.Errorf(routingFailedTmpl, req.URL.Scheme+`://`+req.URL.Host)
 }
 
 func (mocker *EasyMocker) updateMatchCount(rt router) {
-	mocker.cntMu.Lock()
+	mocker.matchCntMu.Lock()
 	if _, exist := mocker.matchedCounter[rt]; exist {
 		mocker.matchedCounter[rt]++
 	} else {
 		mocker.matchedCounter[rt] = 1
 	}
-	mocker.cntMu.Unlock()
+	mocker.matchCntMu.Unlock()
 }
 
 func (mocker *EasyMocker) updateMismatchCount(rt router) {
-	mocker.cntMu.Lock()
+	mocker.missCntMu.Lock()
 	if _, exist := mocker.mismatchCounter[rt]; exist {
 		mocker.mismatchCounter[rt]++
 	} else {
 		mocker.mismatchCounter[rt] = 1
 	}
-	mocker.cntMu.Unlock()
+	mocker.missCntMu.Unlock()
 }

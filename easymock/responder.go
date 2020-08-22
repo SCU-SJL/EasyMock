@@ -2,6 +2,7 @@ package easymock
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"net/http"
 	"sync"
 )
@@ -13,8 +14,8 @@ type EasyResponder struct {
 }
 
 func NewStringEasyResponder(statusCode int, respBody string) *EasyResponder {
-	 resp := newStringResponse(statusCode, respBody)
-	 return NewEasyResponder(resp)
+	resp := newStringResponse(statusCode, respBody)
+	return NewEasyResponder(resp)
 }
 
 func NewBytesEasyResponder(statusCode int, respBody []byte) *EasyResponder {
@@ -32,23 +33,32 @@ func NewJsonEasyResponder(statusCode int, respBody interface{}) (*EasyResponder,
 	return NewEasyResponder(resp), nil
 }
 
+func NewXmlEasyResponder(statusCode int, respBody interface{}) (*EasyResponder, error) {
+	xmlBody, err := xml.Marshal(respBody)
+	if err != nil {
+		return nil, err
+	}
+	resp := newBytesResponse(statusCode, xmlBody)
+	resp.Header.Set("Content-Type", "application/xml")
+	return NewEasyResponder(resp), nil
+}
+
 func NewEasyResponder(resp *http.Response) *EasyResponder {
 	reqHandler := func(req *http.Request) (*http.Response, error) {
 		res := *resp
-
 		if body, ok := resp.Body.(*easyResponse); ok {
 			res.Body = body.Clone()
 		}
-
 		res.Request = req
 		return &res, nil
 	}
 
-	return &EasyResponder{
+	responder := &EasyResponder{
 		mu:            sync.Mutex{},
 		reqHandleFunc: reqHandler,
 		available:     true,
 	}
+	return responder
 }
 
 func (eR *EasyResponder) Enable() {
