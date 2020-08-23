@@ -1,4 +1,4 @@
-module easy-mock
+module github.com/SCU-SJL/easymock
 
 go 1.14
 

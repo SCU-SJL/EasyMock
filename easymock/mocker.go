@@ -35,6 +35,7 @@ func NewEasyMockerTransport() *EasyMocker {
 	return &EasyMocker{
 		responderMu:     sync.Mutex{},
 		matchCntMu:      sync.Mutex{},
+		missCntMu:       sync.Mutex{},
 		responderMap:    make(map[router]*EasyResponder),
 		matchedCounter:  make(map[router]int),
 		mismatchCounter: make(map[router]int),
@@ -85,6 +86,7 @@ func (mocker *EasyMocker) RoundTrip(req *http.Request) (*http.Response, error) {
 	if method == "" {
 		method = http.MethodGet
 	}
+
 	rt := router{
 		Method: method,
 		Url:    url,
@@ -98,7 +100,7 @@ func (mocker *EasyMocker) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	mocker.updateMatchCount(rt)
-	return (*responder).reqHandleFunc(req)
+	return (*responder).reqHandler(req)
 }
 
 func RegisterResponder(method, url string, responder *EasyResponder) {
@@ -106,10 +108,16 @@ func RegisterResponder(method, url string, responder *EasyResponder) {
 		Method: method,
 		Url:    url,
 	}
+
 	MockerTransport.responderMu.Lock()
-	MockerTransport.responderMap[rt] = responder
-	MockerTransport.matchedCounter[rt] = 0
-	MockerTransport.responderMu.Unlock()
+	defer MockerTransport.responderMu.Unlock()
+
+	if _, ok := MockerTransport.responderMap[rt]; !ok {
+		MockerTransport.responderMap[rt] = responder
+		MockerTransport.matchedCounter[rt] = 0
+	} else {
+		panic(fmt.Sprintf("responder of [%s - %s] already exists", rt.Method, rt.Url))
+	}
 }
 
 func RemoveResponder(method, url string) {

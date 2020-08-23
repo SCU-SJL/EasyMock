@@ -1,10 +1,10 @@
 package test
 
 import (
-	"easy-mock/easymock"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/SCU-SJL/easymock/easymock"
 	"github.com/stretchr/testify/suite"
 	"net/http"
 	"testing"
@@ -74,6 +74,28 @@ func (suite *MockerTestSuite) TestEasyMockWithJsonResp() {
 	jsonResponder, err := easymock.NewJsonEasyResponder(http.StatusOK, company)
 	suite.Nil(err)
 	expectedRespBody, err := json.Marshal(company)
+	suite.Nil(err)
+
+	suite.execTestCase(&httpGetCase{
+		baseCase: baseCase{
+			method:       http.MethodGet,
+			url:          mockGoogleUrl,
+			responder:    jsonResponder,
+			shouldRemove: true,
+		},
+		expectedRespBody: expectedRespBody,
+	})
+}
+
+func (suite *MockerTestSuite) TestEasyMockWithJsonResp2() {
+	m := map[string]interface{}{
+		"name":   "sjl",
+		"age":    20,
+		"school": "SCU",
+	}
+	jsonResponder, err := easymock.NewJsonEasyResponder(http.StatusOK, m)
+	suite.Nil(err)
+	expectedRespBody, err := json.Marshal(m)
 	suite.Nil(err)
 
 	suite.execTestCase(&httpGetCase{

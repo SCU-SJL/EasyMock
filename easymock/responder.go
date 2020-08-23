@@ -7,20 +7,22 @@ import (
 	"sync"
 )
 
+type RequestHandler func(req *http.Request) (resp *http.Response, err error)
+
 type EasyResponder struct {
-	mu            sync.Mutex
-	reqHandleFunc func(req *http.Request) (resp *http.Response, err error)
-	available     bool
+	mu         sync.Mutex
+	reqHandler RequestHandler
+	available  bool
 }
 
 func NewStringEasyResponder(statusCode int, respBody string) *EasyResponder {
-	resp := newStringResponse(statusCode, respBody)
-	return NewEasyResponder(resp)
+	resp := newHttpResponseWithString(statusCode, respBody)
+	return NewEasyResponderWithResp(resp)
 }
 
 func NewBytesEasyResponder(statusCode int, respBody []byte) *EasyResponder {
-	resp := newBytesResponse(statusCode, respBody)
-	return NewEasyResponder(resp)
+	resp := newHttpResponseWithBytes(statusCode, respBody)
+	return NewEasyResponderWithResp(resp)
 }
 
 func NewJsonEasyResponder(statusCode int, respBody interface{}) (*EasyResponder, error) {
@@ -28,9 +30,9 @@ func NewJsonEasyResponder(statusCode int, respBody interface{}) (*EasyResponder,
 	if err != nil {
 		return nil, err
 	}
-	resp := newBytesResponse(statusCode, jsonBody)
+	resp := newHttpResponseWithBytes(statusCode, jsonBody)
 	resp.Header.Set("Content-Type", "application/json")
-	return NewEasyResponder(resp), nil
+	return NewEasyResponderWithResp(resp), nil
 }
 
 func NewXmlEasyResponder(statusCode int, respBody interface{}) (*EasyResponder, error) {
@@ -38,12 +40,12 @@ func NewXmlEasyResponder(statusCode int, respBody interface{}) (*EasyResponder, 
 	if err != nil {
 		return nil, err
 	}
-	resp := newBytesResponse(statusCode, xmlBody)
+	resp := newHttpResponseWithBytes(statusCode, xmlBody)
 	resp.Header.Set("Content-Type", "application/xml")
-	return NewEasyResponder(resp), nil
+	return NewEasyResponderWithResp(resp), nil
 }
 
-func NewEasyResponder(resp *http.Response) *EasyResponder {
+func NewEasyResponderWithResp(resp *http.Response) *EasyResponder {
 	reqHandler := func(req *http.Request) (*http.Response, error) {
 		res := *resp
 		if body, ok := resp.Body.(*easyResponse); ok {
@@ -54,11 +56,19 @@ func NewEasyResponder(resp *http.Response) *EasyResponder {
 	}
 
 	responder := &EasyResponder{
-		mu:            sync.Mutex{},
-		reqHandleFunc: reqHandler,
-		available:     true,
+		mu:         sync.Mutex{},
+		reqHandler: reqHandler,
+		available:  true,
 	}
 	return responder
+}
+
+func NewEasyResponderWithReqHandler(reqHandler RequestHandler) *EasyResponder {
+	return &EasyResponder{
+		mu:         sync.Mutex{},
+		reqHandler: reqHandler,
+		available:  true,
+	}
 }
 
 func (eR *EasyResponder) Enable() {

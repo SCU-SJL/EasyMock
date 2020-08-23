@@ -1,8 +1,7 @@
 package test
 
 import (
-	"easy-mock/easymock"
-	"io"
+	"github.com/SCU-SJL/easymock/easymock"
 	"net/http"
 )
 
@@ -39,15 +38,4 @@ type httpGetCase struct {
 
 func (gc *httpGetCase) getResult() (*http.Response, error) {
 	return http.Get(gc.url)
-}
-
-type httpPostCase struct {
-	baseCase
-	postContentType  string
-	postBody         io.Reader
-	expectedRespBody interface{}
-}
-
-func (gc *httpPostCase) getResult() (*http.Response, error) {
-	return http.Post(gc.url, gc.postContentType, gc.postBody)
 }

@@ -52,22 +52,23 @@ func newEasyResponse(data interface{}) *easyResponse {
 	return eResp
 }
 
-func newStringResponse(statusCode int, body string) *http.Response {
-	return &http.Response{
-		Status:        strconv.Itoa(statusCode),
-		StatusCode:    statusCode,
-		Header:        http.Header{},
-		Body:          newEasyResponse(body),
-		ContentLength: int64(len([]byte(body))),
-	}
+func newHttpResponseWithString(statusCode int, body string) *http.Response {
+	resp := newHttpResponse(statusCode, body)
+	resp.ContentLength = int64(len([]byte(body)))
+	return resp
 }
 
-func newBytesResponse(statusCode int, body []byte) *http.Response {
+func newHttpResponseWithBytes(statusCode int, body []byte) *http.Response {
+	resp := newHttpResponse(statusCode, body)
+	resp.ContentLength = int64(len(body))
+	return resp
+}
+
+func newHttpResponse(statusCode int, body interface{}) *http.Response {
 	return &http.Response{
-		Status:        strconv.Itoa(statusCode),
-		StatusCode:    statusCode,
-		Header:        http.Header{},
-		Body:          newEasyResponse(body),
-		ContentLength: int64(len(body)),
+		Status:     strconv.Itoa(statusCode),
+		StatusCode: statusCode,
+		Header:     http.Header{},
+		Body:       newEasyResponse(body),
 	}
 }
