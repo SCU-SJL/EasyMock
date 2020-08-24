@@ -16,12 +16,12 @@ type EasyResponder struct {
 }
 
 func NewStringEasyResponder(statusCode int, respBody string) *EasyResponder {
-	resp := newHttpResponseWithString(statusCode, respBody)
+	resp := NewHttpResponseWithString(statusCode, respBody)
 	return NewEasyResponderWithResp(resp)
 }
 
 func NewBytesEasyResponder(statusCode int, respBody []byte) *EasyResponder {
-	resp := newHttpResponseWithBytes(statusCode, respBody)
+	resp := NewHttpResponseWithBytes(statusCode, respBody)
 	return NewEasyResponderWithResp(resp)
 }
 
@@ -30,7 +30,7 @@ func NewJsonEasyResponder(statusCode int, respBody interface{}) (*EasyResponder,
 	if err != nil {
 		return nil, err
 	}
-	resp := newHttpResponseWithBytes(statusCode, jsonBody)
+	resp := NewHttpResponseWithBytes(statusCode, jsonBody)
 	resp.Header.Set("Content-Type", "application/json")
 	return NewEasyResponderWithResp(resp), nil
 }
@@ -40,7 +40,7 @@ func NewXmlEasyResponder(statusCode int, respBody interface{}) (*EasyResponder, 
 	if err != nil {
 		return nil, err
 	}
-	resp := newHttpResponseWithBytes(statusCode, xmlBody)
+	resp := NewHttpResponseWithBytes(statusCode, xmlBody)
 	resp.Header.Set("Content-Type", "application/xml")
 	return NewEasyResponderWithResp(resp), nil
 }

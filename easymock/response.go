@@ -2,6 +2,7 @@ package easymock
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -52,16 +53,26 @@ func newEasyResponse(data interface{}) *easyResponse {
 	return eResp
 }
 
-func newHttpResponseWithString(statusCode int, body string) *http.Response {
+func NewHttpResponseWithString(statusCode int, body string) *http.Response {
 	resp := newHttpResponse(statusCode, body)
 	resp.ContentLength = int64(len([]byte(body)))
 	return resp
 }
 
-func newHttpResponseWithBytes(statusCode int, body []byte) *http.Response {
+func NewHttpResponseWithBytes(statusCode int, body []byte) *http.Response {
 	resp := newHttpResponse(statusCode, body)
 	resp.ContentLength = int64(len(body))
 	return resp
+}
+
+func NewHttpResponseWithJson(statusCode int, body interface{}) (*http.Response, error) {
+	b, err := json.Marshal(body)
+	if err != nil {
+		return newHttpResponse(http.StatusBadRequest, nil), err
+	}
+	resp := newHttpResponse(statusCode, b)
+	resp.ContentLength = int64(len(b))
+	return resp, nil
 }
 
 func newHttpResponse(statusCode int, body interface{}) *http.Response {
