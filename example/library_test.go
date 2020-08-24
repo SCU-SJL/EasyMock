@@ -32,8 +32,8 @@ func TestLibrary(t *testing.T) {
 
 func (lib *LibraryTestSuite) SetupSuite() {
 	easymock.Start()
-	lib.MockAddBooks()
-	lib.MockListAllBooks()
+	easymock.RegisterResponder(http.MethodGet, listBooksUrl, lib.MockListAllBooks())
+	easymock.RegisterResponder(http.MethodPost, addBooksUrl, lib.MockAddBooks())
 }
 
 func (lib *LibraryTestSuite) BeforeTest(suiteName, testName string) {
@@ -48,7 +48,7 @@ func (lib *LibraryTestSuite) TearDownSuite() {
 	easymock.Shutdown()
 }
 
-func (lib *LibraryTestSuite) MockListAllBooks() {
+func (lib *LibraryTestSuite) MockListAllBooks() *easymock.EasyResponder {
 	responder := easymock.NewEasyResponderWithReqHandler(func(req *http.Request) (resp *http.Response, err error) {
 		resp, err = easymock.NewHttpResponseWithJson(http.StatusOK, lib.library)
 		if err != nil {
@@ -56,10 +56,10 @@ func (lib *LibraryTestSuite) MockListAllBooks() {
 		}
 		return resp, nil
 	})
-	easymock.RegisterResponder(http.MethodGet, listBooksUrl, responder)
+	return responder
 }
 
-func (lib *LibraryTestSuite) MockAddBooks() {
+func (lib *LibraryTestSuite) MockAddBooks() *easymock.EasyResponder {
 	responder := easymock.NewEasyResponderWithReqHandler(func(req *http.Request) (resp *http.Response, err error) {
 		books := make([]Book, 0)
 		if err := json.NewDecoder(req.Body).Decode(&books); err != nil {
@@ -72,7 +72,7 @@ func (lib *LibraryTestSuite) MockAddBooks() {
 		}
 		return resp, nil
 	})
-	easymock.RegisterResponder(http.MethodPost, addBooksUrl, responder)
+	return responder
 }
 
 func (lib *LibraryTestSuite) TestAddBooks() {
