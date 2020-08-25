@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
+	"regexp"
 	"sync"
 )
 
@@ -87,4 +88,20 @@ func (eR *EasyResponder) IsAvailable() bool {
 	eR.mu.Lock()
 	defer eR.mu.Unlock()
 	return eR.available
+}
+
+type EasyRegexResponder struct {
+	*EasyResponder
+	oriUrl  string
+	matcher *regexp.Regexp
+}
+
+func (eRR *EasyRegexResponder) isMatched(url string) bool {
+	return eRR.matcher.Match([]byte(url))
+}
+
+func NewEasyRegexResponderWithReqHandler(reqHandler RequestHandler) *EasyRegexResponder {
+	return &EasyRegexResponder{
+		EasyResponder: NewEasyResponderWithReqHandler(reqHandler),
+	}
 }

@@ -3,6 +3,7 @@ package easymock
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"sync"
 )
 
@@ -13,14 +14,15 @@ var (
 
 	globalMu sync.Mutex
 
-	routingFailedTmpl = `routing failed, no responders were found for url '%s'`
+	routingFailedTmpl   = `routing failed, no responders were found for url '%s'`
+	urlNotAvailableTmpl = `url '%s' is not available`
 )
 
-// TODO add no responder to EasyMocker
 type EasyMocker struct {
 	responderMu           sync.Mutex
 	matchCntMu, missCntMu sync.Mutex
 	responderMap          map[router]*EasyResponder
+	regexResponderMap     map[router]*EasyRegexResponder
 	matchedCounter        map[router]int
 	mismatchCounter       map[router]int
 	totalCount            int
@@ -33,13 +35,14 @@ type router struct {
 
 func NewEasyMockerTransport() *EasyMocker {
 	return &EasyMocker{
-		responderMu:     sync.Mutex{},
-		matchCntMu:      sync.Mutex{},
-		missCntMu:       sync.Mutex{},
-		responderMap:    make(map[router]*EasyResponder),
-		matchedCounter:  make(map[router]int),
-		mismatchCounter: make(map[router]int),
-		totalCount:      0,
+		responderMu:       sync.Mutex{},
+		matchCntMu:        sync.Mutex{},
+		missCntMu:         sync.Mutex{},
+		responderMap:      make(map[router]*EasyResponder),
+		regexResponderMap: make(map[router]*EasyRegexResponder),
+		matchedCounter:    make(map[router]int),
+		mismatchCounter:   make(map[router]int),
+		totalCount:        0,
 	}
 }
 
@@ -93,14 +96,30 @@ func (mocker *EasyMocker) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	responder, ok := mocker.responderMap[rt]
-
-	if !ok {
-		mocker.updateMismatchCount(rt)
-		return mocker.connectFail(req)
+	if ok && responder.IsAvailable() {
+		mocker.updateMatchCount(rt)
+		return (*responder).reqHandler(req)
 	}
 
-	mocker.updateMatchCount(rt)
-	return (*responder).reqHandler(req)
+	regexpResponder, regexOk := mocker.findRegexResponder(rt)
+	if regexOk && regexpResponder.IsAvailable() {
+		mocker.updateMatchCount(rt)
+		return (*regexpResponder).reqHandler(req)
+	}
+
+	mocker.updateMismatchCount(rt)
+	return mocker.connectFail(req,
+		(ok && !responder.IsAvailable()) ||
+		(regexOk && !regexpResponder.IsAvailable()))
+}
+
+func (mocker *EasyMocker) findRegexResponder(rt router) (*EasyRegexResponder, bool) {
+	for _, regexResponder := range mocker.regexResponderMap {
+		if regexResponder.isMatched(rt.Url) {
+			return regexResponder, true
+		}
+	}
+	return nil, false
 }
 
 func RegisterResponder(method, url string, responder *EasyResponder) {
@@ -116,8 +135,30 @@ func RegisterResponder(method, url string, responder *EasyResponder) {
 		MockerTransport.responderMap[rt] = responder
 		MockerTransport.matchedCounter[rt] = 0
 	} else {
-		panic(fmt.Sprintf("responder of [%s - %s] already exists", rt.Method, rt.Url))
+		registerFailed(rt)
 	}
+}
+
+func RegisterRegexResponder(method, url string, regexResponder *EasyRegexResponder) {
+	rt := router{
+		Method: method,
+		Url:    url,
+	}
+	MockerTransport.responderMu.Lock()
+	defer MockerTransport.responderMu.Unlock()
+
+	if _, ok := MockerTransport.regexResponderMap[rt]; !ok {
+		regexResponder.oriUrl = url
+		regexResponder.matcher = regexp.MustCompile(url)
+		MockerTransport.regexResponderMap[rt] = regexResponder
+		MockerTransport.matchedCounter[rt] = 0
+	} else {
+		registerFailed(rt)
+	}
+}
+
+func registerFailed(rt router) {
+	panic(fmt.Sprintf("responder of [%s - %s] already exists", rt.Method, rt.Url))
 }
 
 func RemoveResponder(method, url string) {
@@ -130,8 +171,11 @@ func RemoveResponder(method, url string) {
 	MockerTransport.responderMu.Unlock()
 }
 
-func (mocker *EasyMocker) connectFail(req *http.Request) (*http.Response, error) {
-	return nil, fmt.Errorf(routingFailedTmpl, req.URL.Scheme+`://`+req.URL.Host)
+func (mocker *EasyMocker) connectFail(req *http.Request, available bool) (*http.Response, error) {
+	if available {
+		return nil, fmt.Errorf(routingFailedTmpl, req.URL.Scheme+`://`+req.URL.Host)
+	}
+	return nil, fmt.Errorf(urlNotAvailableTmpl, req.URL.Scheme+`://`+req.URL.Host)
 }
 
 func (mocker *EasyMocker) updateMatchCount(rt router) {
